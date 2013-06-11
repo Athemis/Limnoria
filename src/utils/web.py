@@ -179,6 +179,9 @@ class HtmlToText(HTMLParser, object):
     def handle_data(self, data):
         self.data.append(data)
 
+    def handle_entityref(self, data):
+        self.data.append(unichr(htmlentitydefs.name2codepoint[data]))
+
     def getText(self):
         text = ''.join(self.data).strip()
         return normalizeWhitespace(text)
@@ -186,8 +189,15 @@ class HtmlToText(HTMLParser, object):
 def htmlToText(s, tagReplace=' '):
     """Turns HTML into text.  tagReplace is a string to replace HTML tags with.
     """
-    if sys.version_info[0] >= 3 and isinstance(s, bytes):
-        s = s.decode()
+    try:
+        import chardet
+    except ImportError:
+        s = s.decode('utf8')
+    else:
+        u = chardet.universaldetector.UniversalDetector()
+        u.feed(s)
+        u.close()
+        s = s.decode(u.result['encoding'])
     x = HtmlToText(tagReplace)
     x.feed(s)
     return x.getText()

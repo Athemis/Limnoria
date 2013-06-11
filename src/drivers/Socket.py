@@ -1,4 +1,4 @@
-###
+##
 # Copyright (c) 2002-2004, Jeremiah Fincher
 # Copyright (c) 2010, James McCoy
 # All rights reserved.
@@ -68,10 +68,12 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
     _selecting = [False] # We want it to be mutable.
     def __init__(self, irc):
         self._instances.append(self)
+        assert irc is not None
         self.irc = irc
         drivers.IrcDriver.__init__(self, irc)
         drivers.ServersMixin.__init__(self, irc)
         self.conn = None
+        self._attempt = -1
         self.servers = ()
         self.eagains = 0
         self.inbuffer = b''
@@ -194,7 +196,7 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
                 if sys.version_info[0] >= 3:
                     #first, try to decode using utf-8
                     try:
-                        line = line.decode(encoding='utf-8', errors='strict')
+                        line = line.decode('utf8', 'strict')
                     except UnicodeError:
                         # if this fails and chardet is loaded, try to guess the correct encoding
                         if chardetLoaded:
@@ -204,18 +206,19 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
                             if u.result['encoding']:
                                 # try to use the guessed encoding
                                 try:
-                                    line = line.decode(u.result['encoding'], errors='strict')
+                                    line = line.decode(u.result['encoding'],
+                                        'strict')
                                 # on error, give up and replace the offending characters
                                 except UnicodeError:
                                     line = line.decode(errors='replace')
                             else:
                                 # if no encoding could be guessed, fall back to utf-8 and
                                 # replace offending characters
-                                line = line.decode(encoding='utf-8', errors='replace')
+                                line = line.decode('utf8', 'replace')
                         # if chardet is not loaded, try to decode using utf-8 and replace any
                         # offending characters
                         else:
-                            line = line.decode(encoding='utf-8', errors='replace')
+                            line = line.decode('utf8', 'replace')
            
                 msg = drivers.parseMsg(line)
                 if msg is not None:
@@ -238,12 +241,16 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
         self.reconnect(reset=False, **kwargs)
 
     def reconnect(self, reset=True):
+        self._attempt += 1
         self.nextReconnectTime = None
         if self.connected:
             drivers.log.reconnect(self.irc.network)
             if self in self._instances:
                 self._instances.remove(self)
-            self.conn.shutdown(socket.SHUT_RDWR)
+            try:
+                self.conn.shutdown(socket.SHUT_RDWR)
+            except: # "Transport endpoint not connected"
+                pass
             self.conn.close()
             self.connected = False
         if reset:
@@ -252,6 +259,8 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
         else:
             drivers.log.debug('Not resetting %s.', self.irc)
         server = self._getNextServer()
+        address = utils.net.getAddressFromHostname(server[0],
+                attempt=self._attempt)
         drivers.log.connect(self.currentServer)
         try:
             socks_proxy = getattr(conf.supybot.networks, self.irc.network) \
@@ -263,7 +272,7 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
                 log.error('Cannot use socks proxy (SocksiPy not installed), '
                         'using direct connection instead.')
                 socks_proxy = ''
-            self.conn = utils.net.getSocket(server[0], socks_proxy)
+            self.conn = utils.net.getSocket(address, socks_proxy)
             vhost = conf.supybot.protocols.irc.vhost()
             self.conn.bind((vhost, 0))
         except socket.error, e:
@@ -274,14 +283,14 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
         # At least 10 seconds.
         self.conn.settimeout(max(10, conf.supybot.drivers.poll()*10))
         try:
-            self.conn.connect(server)
+            if getattr(conf.supybot.networks, self.irc.network).ssl():
+                assert globals().has_key('ssl')
+                self.conn = ssl.wrap_socket(self.conn)
+            self.conn.connect((address, server[1]))
             def setTimeout():
                 self.conn.settimeout(conf.supybot.drivers.poll())
             conf.supybot.drivers.poll.addCallback(setTimeout)
             setTimeout()
-            if getattr(conf.supybot.networks, self.irc.network).ssl():
-                assert globals().has_key('ssl')
-                self.conn = ssl.wrap_socket(self.conn)
             self.connected = True
             self.resetDelay()
         except socket.error, e:
@@ -333,7 +342,6 @@ class SocketDriver(drivers.IrcDriver, drivers.ServersMixin):
 
     def _reallyDie(self):
         if self.conn is not None:
-            self.conn.shutdown(socket.SHUT_RDWR)
             self.conn.close()
         drivers.IrcDriver.die(self)
         # self.irc.die() Kill off the ircs yourself, jerk!

@@ -152,7 +152,8 @@ class RSS(callbacks.Plugin):
         else:
             for headline in headlines:
                 newheadlines = [format('%s', h[0]) for h in headlines]
-        return newheadlines
+        return map(lambda x:x.replace('\n', '  ').replace('\r', ''),
+                newheadlines)
 
     def _newHeadlines(self, irc, channels, name, url):
         try:
@@ -214,7 +215,8 @@ class RSS(callbacks.Plugin):
                     bold = self.registryValue('bold', channel)
                     sep = self.registryValue('headlineSeparator', channel)
                     prefix = self.registryValue('announcementPrefix', channel)
-                    pre = format('%s%s: ', prefix, name)
+                    suffix = self.registryValue('announcementSeparator', channel)
+                    pre = format('%s%s%s', prefix, name, suffix)
                     if bold:
                         pre = ircutils.bold(pre)
                         sep = ircutils.bold(sep)
@@ -260,7 +262,7 @@ class RSS(callbacks.Plugin):
                 try:
                     self.log.debug('Downloading new feed from %u', url)
                     results = feedparser.parse(url)
-                    if 'bozo_exception' in results:
+                    if 'bozo_exception' in results and not results['entries']:
                         raise results['bozo_exception']
                 except feedparser.sgmllib.SGMLParseError:
                     self.log.exception('Uncaught exception from feedparser:')

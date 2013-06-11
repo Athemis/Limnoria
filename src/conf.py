@@ -277,6 +277,19 @@ class SpaceSeparatedSetOfChannels(registry.SpaceSeparatedListOf):
             return ircmsgs.join(channel, key)
         else:
             return ircmsgs.join(channel)
+    def joins(self):
+        from . import ircmsgs # Don't put this globally!  It's recursive.
+        channels = []
+        channels_with_key = []
+        keys = []
+        for channel in self():
+            key = self.key.get(channel)()
+            if key:
+                keys.append(key)
+                channels_with_key.append(channel)
+            else:
+                channels.append(channel)
+        return ircmsgs.joins(channels_with_key + channels, keys)
 
 def registerNetwork(name, password='', ssl=False, sasl_username='',
         sasl_password=''):
@@ -677,6 +690,9 @@ registerGlobalValue(supybot.commands.defaultPlugins, 'importantPlugins',
 ###
 registerGroup(supybot, 'abuse')
 registerGroup(supybot.abuse, 'flood')
+registerGlobalValue(supybot.abuse.flood, 'interval',
+    registry.PositiveInteger(60, _("""Determines the interval used for
+    the history storage.""")))
 registerGlobalValue(supybot.abuse.flood, 'command',
     registry.Boolean(True, _("""Determines whether the bot will defend itself
     against command-flooding.""")))
@@ -789,6 +805,9 @@ registerGlobalValue(supybot.directories, 'backup',
 registerGlobalValue(supybot.directories.data, 'tmp',
     DataFilenameDirectory('tmp', _("""Determines what directory temporary files
     are put into.""")))
+registerGlobalValue(supybot.directories.data, 'web',
+    DataFilenameDirectory('web', _("""Determines what directory files of the
+    web server (templates, custom images, ...) are put into.""")))
 
 utils.file.AtomicFile.default.tmpDir = supybot.directories.data.tmp
 utils.file.AtomicFile.default.backupDir = supybot.directories.backup
@@ -985,7 +1004,7 @@ class Banmask(registry.SpaceSeparatedSetOfStrings):
                 self.error()
         self.__parent.setValue(self.List(v))
 
-    def makeBanmask(self, hostmask, options=None):
+    def makeBanmask(self, hostmask, options=None, channel=None):
         """Create a banmask from the given hostmask.  If a style of banmask
         isn't specified via options, the value of
         conf.supybot.protocols.irc.banmask is used.
@@ -993,7 +1012,8 @@ class Banmask(registry.SpaceSeparatedSetOfStrings):
         options - A list specifying which parts of the hostmask should
         explicitly be matched: nick, user, host.  If 'exact' is given, then
         only the exact hostmask will be used."""
-        channel = dynamic.channel
+        if not channel:
+            channel = dynamic.channel
         assert channel is None or ircutils.isChannel(channel)
         (nick, user, host) = ircutils.splitHostmask(hostmask)
         bnick = '*'
@@ -1113,9 +1133,6 @@ registerGlobalValue(supybot.servers.http, 'keepAlive',
     registry.Boolean(False, _("""Determines whether the server will stay
     alive if no plugin is using it. This also means that the server will
     start even if it is not used.""")))
-registerGlobalValue(supybot.servers.http, 'robots',
-    registry.String('', _("""Determines the content of the robots.txt file,
-    served on the server to search engine.""")))
 registerGlobalValue(supybot.servers.http, 'favicon',
     registry.String('', _("""Determines the path of the file served as
     favicon to browsers.""")))

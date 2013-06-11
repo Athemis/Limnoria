@@ -75,7 +75,12 @@ class Misc(callbacks.Plugin):
     def __init__(self, irc):
         self.__parent = super(Misc, self)
         self.__parent.__init__(irc)
-        self.invalidCommands = ircutils.FloodQueue(60)
+        self.invalidCommands = \
+                ircutils.FloodQueue(conf.supybot.abuse.flood.interval())
+        conf.supybot.abuse.flood.interval.addCallback(self.setFloodQueueTimeout)
+
+    def setFloodQueueTimeout(self, *args, **kwargs):
+        self.invalidCommands.timeout = conf.supybot.abuse.flood.interval()
 
     def callPrecedence(self, irc):
         return ([cb for cb in irc.callbacks if cb is not self], [])
@@ -103,8 +108,9 @@ class Misc(callbacks.Plugin):
             ircdb.ignores.add(banmask, time.time() + punishment)
             if conf.supybot.abuse.flood.command.invalid.notify():
                 irc.reply(_('You\'ve given me %s invalid commands within the last '
-                          'minute; I\'m now ignoring you for %s.') %
+                          '%i seconds; I\'m now ignoring you for %s.') %
                           (maximum,
+                           conf.supybot.abuse.flood.interval(),
                            utils.timeElapsed(punishment, seconds=False)))
             return
         # Now, for normal handling.
@@ -121,7 +127,7 @@ class Misc(callbacks.Plugin):
             if self.invalidCommands.len(msg) > maximum and \
                not ircdb.checkCapability(msg.prefix, 'owner'):
                 penalty = conf.supybot.abuse.flood.command.invalid.punishment()
-                banmask = banmasker(msg.prefix)
+                banmask = banmasker(msg.prefix, channel=None)
                 self.log.info('Ignoring %s for %s seconds due to an apparent '
                               'invalid command flood.', banmask, penalty)
                 if tokens and tokens[0] == 'Error:':
@@ -346,14 +352,15 @@ class Misc(callbacks.Plugin):
                 return
         try:
             L = irc._mores[userHostmask]
-            chunk = L.pop()
+            number = self.registryValue('mores', msg.args[0])
+            chunks = [L.pop() for x in xrange(0, number)]
             if L:
                 if len(L) < 2:
                     more = _('more message')
                 else:
                     more = _('more messages')
-                chunk += format(' \x02(%s)\x0F', more)
-            irc.reply(chunk, True)
+                chunks[-1] += format(' \x02(%s)\x0F', more)
+            irc.replies(chunks, noLengthCheck=True, oneToOne=False)
         except KeyError:
             irc.error(_('You haven\'t asked me a command; perhaps you want '
                       'to see someone else\'s more.  To do so, call this '
@@ -509,7 +516,7 @@ class Misc(callbacks.Plugin):
         if target.lower() == 'me':
             target = msg.nick
         if ircutils.isChannel(target):
-            irc.error(_('Dude, just give the command.  No need for the tell.'))
+            irc.error(_('Hey, just give the command.  No need for the tell.'))
             return
         if not ircutils.isNick(target):
             irc.errorInvalid('nick', target)

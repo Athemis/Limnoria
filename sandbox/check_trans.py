@@ -2,26 +2,59 @@
 
 import os
 import sys
+import glob
+import subprocess
 
 def main():
     directory = sys.argv[1]
-    for plugin in os.listdir(directory):
-        if plugin[0] not in 'AZERTYUIOPQSDFGHJKLMWXCVBN':
-            continue
-        checkPlugin(os.path.join(directory, plugin))
+    if directory == '--core':
+        checkCore()
+    else:
+        for plugin in os.listdir(directory):
+            if plugin[0] not in 'AZERTYUIOPQSDFGHJKLMWXCVBN':
+                continue
+            checkPlugin(os.path.join(directory, plugin))
 
-def checkPlugin(pluginPath):
-    try:
-        pot = open(os.path.join(pluginPath, 'messages.pot'))
-    except IOError: # Does not exist
-        print 'WARNING: %s has no messages.pot' % pluginPath
-        return
-    localePath = os.path.join(pluginPath, 'locale')
+def changedir(f):
+    def newf(new_path):
+        old_path = os.getcwd()
+        os.chdir(new_path)
+        try:
+            return f('.')
+        finally:
+            os.chdir(old_path)
+    return newf
+
+def checkCore():
+    _checkCore(os.path.join(os.path.dirname(__file__), '..'))
+
+@changedir
+def _checkCore(corePath):
+    subprocess.Popen(['pygettext', '-p', 'locales', 'plugins/__init__.py'] + glob.glob('src/*.py') + glob.glob('src/*/*.py')).wait()
+    localePath = os.path.join(corePath, 'locales')
+    pot = open(os.path.join(localePath, 'messages.pot'))
     for translation in os.listdir(localePath):
         if not translation.endswith('.po'):
             continue
         pot.seek(0)
-        potPath = os.path.join(localePath, translation)
+        potPath = os.path.join(os.getcwd(), 'locales', translation)
+        po = open(potPath)
+        if checkTranslation(pot, po):
+            print 'OK:      ' + potPath
+        else:
+            print 'ERROR:   ' + potPath
+
+
+@changedir
+def checkPlugin(pluginPath):
+    subprocess.Popen('pygettext -D config.py plugin.py', shell=True).wait()
+    pot = open(os.path.join(pluginPath, 'messages.pot'))
+    localePath = os.path.join(pluginPath, 'locales')
+    for translation in os.listdir(localePath):
+        if not translation.endswith('.po'):
+            continue
+        pot.seek(0)
+        potPath = os.path.join(os.getcwd(), 'locales', translation)
         po = open(potPath)
         if checkTranslation(pot, po):
             print 'OK:      ' + potPath

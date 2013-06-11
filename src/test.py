@@ -38,7 +38,6 @@ import urllib
 import httplib
 import unittest
 import threading
-import StringIO
 
 import supybot.log as log
 import supybot.i18n as i18n
@@ -118,28 +117,28 @@ class SupyTestCase(unittest.TestCase):
         def assertIn(self, member, container, msg=None):
             """Just like self.assertTrue(a in b), but with a nicer default message."""
             if member not in container:
-                standardMsg = '%s not found in %s' % (safe_repr(member),
-                                                      safe_repr(container))
+                standardMsg = '%s not found in %s' % (repr(member),
+                                                      repr(container))
                 self.fail(self._formatMessage(msg, standardMsg))
 
         def assertNotIn(self, member, container, msg=None):
             """Just like self.assertTrue(a not in b), but with a nicer default message."""
             if member in container:
-                standardMsg = '%s unexpectedly found in %s' % (safe_repr(member),
-                                                            safe_repr(container))
+                standardMsg = '%s unexpectedly found in %s' % (repr(member),
+                                                            repr(container))
                 self.fail(self._formatMessage(msg, standardMsg))
 
         def assertIs(self, expr1, expr2, msg=None):
             """Just like self.assertTrue(a is b), but with a nicer default message."""
             if expr1 is not expr2:
-                standardMsg = '%s is not %s' % (safe_repr(expr1),
-                                                 safe_repr(expr2))
+                standardMsg = '%s is not %s' % (repr(expr1),
+                                                 repr(expr2))
                 self.fail(self._formatMessage(msg, standardMsg))
 
         def assertIsNot(self, expr1, expr2, msg=None):
             """Just like self.assertTrue(a is not b), but with a nicer default message."""
             if expr1 is expr2:
-                standardMsg = 'unexpectedly identical: %s' % (safe_repr(expr1),)
+                standardMsg = 'unexpectedly identical: %s' % (repr(expr1),)
                 self.fail(self._formatMessage(msg, standardMsg))
 
 
@@ -493,14 +492,6 @@ class ChannelPluginTestCase(PluginTestCase):
             frm = self.prefix
         self.irc.feedMsg(ircmsgs.privmsg(to, query, prefix=frm))
 
-class TestSupyHTTPServer(httpserver.SupyHTTPServer):
-    def __init__(self, *args, **kwargs):
-        pass
-    def serve_forever(self, *args, **kwargs):
-        pass
-    def shutdown(self, *args, **kwargs):
-        pass
-
 class TestRequestHandler(httpserver.SupyHTTPRequestHandler):
     def __init__(self, rfile, wfile, *args, **kwargs):
         self._headers_mode = True
@@ -523,6 +514,8 @@ class TestRequestHandler(httpserver.SupyHTTPRequestHandler):
                 'The HTTP server is not started.'
         self.server = httpserver.http_servers[0]
         httpserver.SupyHTTPRequestHandler.do_X(self, *args, **kwargs)
+
+httpserver.http_servers = [httpserver.TestSupyHTTPServer()]
 
 # Partially stolen from the standart Python library :)
 def open_http(url, data=None):
@@ -590,7 +583,6 @@ class FakeHTTPConnection(httplib.HTTPConnection):
         httplib.HTTPConnection.__init__(self, 'localhost')
         self.rfile = rfile
         self.wfile = wfile
-        self.connect()
     def send(self, data):
         self.wfile.write(data)
     #def putheader(self, name, value):
@@ -606,8 +598,12 @@ class HTTPPluginTestCase(PluginTestCase):
 
     def request(self, url, method='GET', read=True, data={}):
         assert url.startswith('/')
-        wfile = StringIO.StringIO()
-        rfile = StringIO.StringIO()
+        try:
+            from io import BytesIO as StringIO
+        except ImportError:
+            from StringIO import StringIO
+        wfile = StringIO()
+        rfile = StringIO()
         connection = FakeHTTPConnection(wfile, rfile)
         connection.putrequest(method, url)
         connection.endheaders()

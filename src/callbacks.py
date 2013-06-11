@@ -1,3 +1,4 @@
+# -*- coding: utf8 -*-
 ###
 # Copyright (c) 2002-2005, Jeremiah Fincher
 # Copyright (c) 2008-2010, James McCoy
@@ -292,8 +293,8 @@ class Tokenizer(object):
     def _handleToken(self, token):
         if token[0] == token[-1] and token[0] in self.quotes:
             token = token[1:-1]
-            # FIXME: No need to tell you this is a hack.
-            # It has to handle both IRC commands and serialized configuration.
+            # FIXME: No need to tell you this is a hack.
+            # It has to handle both IRC commands and serialized configuration.
             #
             # Whoever you are, if you make a single modification to this
             # code, TEST the code with Python 2 & 3, both with the unit
@@ -464,7 +465,8 @@ class RichReplyMethods(object):
         return self.reply(s, **kwargs)
 
     def replies(self, L, prefixer=None, joiner=None,
-                onlyPrefixFirst=False, to=None, **kwargs):
+                onlyPrefixFirst=False, to=None,
+                oneToOne=None, **kwargs):
         if prefixer is None:
             prefixer = ''
         if joiner is None:
@@ -473,10 +475,11 @@ class RichReplyMethods(object):
             prefixer = prefixer.__add__
         if isinstance(joiner, basestring):
             joiner = joiner.join
-        if ircutils.isChannel(to):
-            oneToOne = conf.get(conf.supybot.reply.oneToOne, to)
-        else:
-            oneToOne = conf.supybot.reply.oneToOne()
+        if oneToOne is None: # Can be True, False, or None
+            if ircutils.isChannel(to):
+                oneToOne = conf.get(conf.supybot.reply.oneToOne, to)
+            else:
+                oneToOne = conf.supybot.reply.oneToOne()
         if oneToOne:
             return self.reply(prefixer(joiner(L)), to=to, **kwargs)
         else:
@@ -516,15 +519,13 @@ class RichReplyMethods(object):
                 v = self._getConfig(conf.supybot.replies.genericNoCapability)
             else:
                 v = self._getConfig(conf.supybot.replies.noCapability)
-                v %= capability
+                try:
+                    v %= capability
+                except TypeError: # No %s in string
+                    pass
             s = self.__makeReply(v, s)
-            return self._error(s, **kwargs)
-            if self._getConfig(conf.supybot.reply.error.noCapability):
-                v = self._getConfig(conf.supybot.replies.genericNoCapability)
-            else:
-                v = self._getConfig(conf.supybot.replies.noCapability)
-            s = self.__makeReply(v % capability, s)
-            return self._error(s, **kwargs)
+            if s:
+                return self._error(s, **kwargs)
         else:
             log.warning('Denying %s for some unspecified capability '
                         '(or a default).', self.msg.prefix)

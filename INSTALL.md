@@ -7,9 +7,10 @@ isn't any way to get around it.  You can get it from [Python homepage].
 
 # Recommended Software
 
-[PySQLite] -- Version 2.x
+[PySQLite] -- Version 3.x (most Python distributions include it by default)
 
-[Twisted] -- Version 1.2.0 or greater
+[Twisted] -- Version 1.2.0 or greater (unless you actually want to use Twisted,
+you don't actually need it)
 
 [PySQLite]:https://code.google.com/p/pysqlite/
 [Twisted]:http://twistedmatrix.com/trac/
@@ -41,14 +42,6 @@ First start by git cloning Limnoria and moving to the cloned repository.
 ```
 git clone git://github.com/ProgVal/Limnoria.git
 cd Limnoria
-```
-
-*If* you want to use Python 3.x, run these commands (the first one may take
-a few minutes):
-
-```
-./sandbox/run_2to3.sh -j3
-cd py3k/
 ```
 
 The rest depends on do you have root access and do you want to perform global or local install.

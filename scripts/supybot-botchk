@@ -97,13 +97,13 @@ if __name__ == '__main__':
         parser.error('No conffile given.')
 
     os.chdir(options.botdir)
-    os.system('touch %s' % options.pidfile)
+    open(options.pidfile, 'a').close() 
 
     pid = None
     try:
         pid = readPid(options.pidfile)
         debug('Found pidFile with proper pid contents of %s' % pid)
-    except ValueError, e:
+    except ValueError as e:
         foundBot = False
 
     if pid is not None:
@@ -117,8 +117,8 @@ if __name__ == '__main__':
         # First, we check if the pidfile is writable.  If not, supybot will just exit,
         # so we go ahead and refuse to start it.
         try:
-            file(options.pidfile, 'r+')
-        except EnvironmentError, e:
+            open(options.pidfile, 'r+')
+        except EnvironmentError as e:
             debug('pidfile (%s) is not writable: %s' % (options.pidfile, e))
             sys.exit(-1)
         debug('Bot not found, starting.')
@@ -132,7 +132,7 @@ if __name__ == '__main__':
                 inst.stdin.write('source %s' % filename + os.linesep)
         cmdline = '%s --daemon %s' % (options.supybot, options.conffile)
         debug('Sending cmdline to sh process.')
-        inst.stdin.write(cmdline + os.linesep)
+        inst.stdin.write(cmdline.encode('utf-8') + os.linesep.encode('utf-8'))
         inst.stdin.close()
         debug('Received from sh process: %r' % inst.stdout.read())
         ret = inst.wait()
